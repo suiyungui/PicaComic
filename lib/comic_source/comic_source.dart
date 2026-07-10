@@ -18,6 +18,7 @@ import '../foundation/js_engine.dart';
 import '../network/base_comic.dart';
 import '../network/res.dart';
 import 'built_in/ehentai.dart';
+import 'built_in/hcomic.dart';
 import 'built_in/hitomi.dart';
 import 'built_in/ht_manga.dart';
 import 'built_in/jm.dart';
@@ -54,7 +55,15 @@ typedef GetThumbnailLoadingConfigFunc = Map<String, dynamic> Function(
     String imageKey)?;
 
 class ComicSource {
-  static final builtIn = [picacg, ehentai, jm, hitomi, htManga, nhentai];
+  static final builtIn = [
+    picacg,
+    ehentai,
+    jm,
+    hitomi,
+    htManga,
+    nhentai,
+    hcomic,
+  ];
 
   static List<ComicSource> sources = [];
 
@@ -65,6 +74,12 @@ class ComicSource {
       sources.firstWhereOrNull((element) => element.key.hashCode == key);
 
   static Future<void> init() async {
+    final previousBuiltInCount = appdata.settings[82].length;
+    final newBuiltInKeys = builtInSources.skip(previousBuiltInCount).toSet();
+    appdata.settings[82] = appdata.settings[82].padRight(
+      builtInSources.length,
+      '1',
+    );
     for (var source in builtInSources) {
       if (appdata.appSettings.isComicSourceEnabled(source)) {
         var s = builtIn.firstWhere((e) => e.key == source);
@@ -73,6 +88,7 @@ class ComicSource {
         s.initData?.call(s);
       }
     }
+    await _initializeNewBuiltInSources(newBuiltInKeys);
     final path = "${App.dataPath}/comic_source";
     if (!(await Directory(path).exists())) {
       Directory(path).create();
@@ -91,6 +107,41 @@ class ComicSource {
       }
     }
     await _initializeAggregatedSearchSources();
+  }
+
+  static Future<void> _initializeNewBuiltInSources(Set<String> keys) async {
+    if (keys.isEmpty) {
+      return;
+    }
+    final explorePages = appdata.appSettings.explorePages;
+    final categoryPages = appdata.appSettings.categoryPages;
+    final searchSources = appdata.appSettings.aggregatedSearchSources;
+    for (final key in keys) {
+      final source = find(key);
+      if (source == null) {
+        continue;
+      }
+      for (final page in source.explorePages) {
+        if (!explorePages.contains(page.title)) {
+          explorePages.add(page.title);
+        }
+      }
+      final categoryKey = source.categoryData?.key;
+      if (categoryKey != null && !categoryPages.contains(categoryKey)) {
+        categoryPages.add(categoryKey);
+      }
+      if (appdata.settings[90] != '*' &&
+          source.searchPageData != null &&
+          !searchSources.contains(key)) {
+        searchSources.add(key);
+      }
+    }
+    appdata.appSettings.explorePages = explorePages;
+    appdata.appSettings.categoryPages = categoryPages;
+    if (appdata.settings[90] != '*') {
+      appdata.appSettings.aggregatedSearchSources = searchSources;
+    }
+    await appdata.updateSettings();
   }
 
   static Future<void> _initializeAggregatedSearchSources() async {

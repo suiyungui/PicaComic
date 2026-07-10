@@ -96,7 +96,7 @@ class Appdata {
     "0", //64 启用侧边翻页
     "0", //65 本地收藏显示数量
     "0", //66 缩略图布局: 覆盖, 容纳
-    "picacg,ehentai,jm,htmanga,nhentai", //67 分类页面
+    "picacg,ehentai,jm,htmanga,nhentai,hcomic", //67 分类页面
     "picacg,ehentai,jm,htmanga,nhentai", //68 收藏页面
     "0", //69 自动添加语言筛选
     "0", //70 反转点按识别
@@ -106,12 +106,12 @@ class Appdata {
     "1.0", //74 图片收藏大小
     "", //75 eh profile
     "0", //76 阅读器内固定屏幕方向: 0-禁用, 1-横屏, 2-竖屏
-    "picacg,Eh主页,Eh热门,禁漫主页,禁漫最新,hitomi,绅士漫画,nhentai", //77 探索页面
+    "picacg,Eh主页,Eh热门,禁漫主页,禁漫最新,hitomi,绅士漫画,nhentai,H-Comic", //77 探索页面
     "0", //78 已下载的eh漫画优先显示副标题
     "6", //79 下载并行
     "1", //80 启动时检查自定义漫画源的更新
     "0", //81 使用深色背景
-    "111111", //82 内置漫画源启用状态,
+    "1111111", //82 内置漫画源启用状态,
     "1", //83 完全隐藏屏蔽的作品
     "0", //84 纯黑色模式
     "www.cdntwice.org,www.cdnsha.org,www.cdnaspa.cc,www.cdnntr.cc", //85 jm api domains
@@ -347,6 +347,9 @@ class _Settings {
     if (index == -1) {
       throw "Not Found";
     }
+    if (index >= appdata.settings[82].length) {
+      return true;
+    }
     return appdata.settings[82][index] == '1';
   }
 
@@ -355,6 +358,10 @@ class _Settings {
     if (index == -1) {
       throw "Not Found";
     }
+    appdata.settings[82] = appdata.settings[82].padRight(
+      builtInSources.length,
+      '1',
+    );
     appdata.settings[82] =
         appdata.settings[82].setValueAt(enabled ? '1' : '0', index);
   }
