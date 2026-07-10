@@ -30,7 +30,10 @@ class _SearchPageComicListState
         widget.head,
         SliverGrid(
           delegate: SliverChildBuilderDelegate(
-            (context, index) => HitomiComicTileDynamicLoading(data[index]),
+            (context, index) => HitomiComicTileDynamicLoading(
+              data[index],
+              blockingContext: [widget.keyword],
+            ),
             childCount: data.length,
           ),
           gridDelegate: SliverGridDelegateWithComics(),
@@ -121,11 +124,15 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
 
 class HitomiComicTileDynamicLoading extends StatefulWidget {
   const HitomiComicTileDynamicLoading(this.id,
-      {Key? key, this.addonMenuOptions})
+      {Key? key,
+      this.addonMenuOptions,
+      this.blockingContext = const []})
       : super(key: key);
   final int id;
 
   final List<ComicTileMenuOption>? addonMenuOptions;
+
+  final Iterable<String> blockingContext;
 
   @override
   State<HitomiComicTileDynamicLoading> createState() =>
@@ -169,7 +176,12 @@ class _HitomiComicTileDynamicLoadingState
 
       return buildLoadingWidget();
     } else {
-      return buildComicTile(context, comic!, 'hitomi');
+      return buildComicTile(
+        context,
+        comic!,
+        'hitomi',
+        blockingContext: widget.blockingContext,
+      );
     }
   }
 

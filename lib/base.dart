@@ -119,6 +119,8 @@ class Appdata {
     "gold-usergeneratedcontent.net", //87 hitomi cdn url
     "0", //88 jm auto checkin
     "2.0.11", //89 jm app version
+    "*", //90 聚合搜索源, * 表示首次加载时自动初始化
+    "https://raw.githubusercontent.com/wgh136/pica_configs/master/index.json", //91 漫画源列表
   ];
 
   /// 隐式数据, 用于存储一些不需要用户设置的数据, 此数据通常为某些组件的状态, 此设置不应当被同步
@@ -433,5 +435,20 @@ class _Settings {
 
   set networkFavorites(List<String> pages) {
     appdata.settings[68] = pages.join(',');
+  }
+
+  List<String> get aggregatedSearchSources => appdata.settings[90]
+      .split(',')
+      .where((source) => source.isNotEmpty)
+      .toList();
+
+  set aggregatedSearchSources(List<String> sources) {
+    appdata.settings[90] = sources.toSet().join(',');
+  }
+
+  String get comicSourceListUrl => appdata.settings[91];
+
+  set comicSourceListUrl(String value) {
+    appdata.settings[91] = value.trim();
   }
 }

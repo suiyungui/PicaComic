@@ -32,6 +32,12 @@ Widget buildExploreSettings(BuildContext context, bool popUp) {
               MultiPagesFilter("分类页面".tl, 67, categoryPages())),
           icon:  const Icon(Icons.account_tree_outlined)
       ),
+      NewPageSetting(
+          title: "聚合搜索源".tl,
+          onTap: () => showPopUpWidget(App.globalContext!,
+              MultiPagesFilter("聚合搜索源".tl, 90, searchSources())),
+          icon: const Icon(Icons.manage_search)
+      ),
       SelectSettingWithAppdata(
         icon: const Icon(Icons.list),
         title: "漫画列表显示方式".tl,
@@ -237,5 +243,11 @@ Map<String, String> networkFavorites(){
     for(var source in ComicSource.sources)
       if(source.favoriteData != null)
         source.key: source.favoriteData!.title.tl
+  };
+}
+Map<String, String> searchSources() {
+  return {
+    for (var source in ComicSource.sources)
+      if (source.searchPageData != null) source.key: source.name.tl
   };
 }

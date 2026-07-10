@@ -6,46 +6,83 @@ class ComicSourceSettings extends StatefulWidget {
   @override
   State<ComicSourceSettings> createState() => _ComicSourceSettingsState();
 
-  // static void checkCustomComicSourceUpdate([bool showLoading = false]) async {
-  //   if (ComicSource.sources.isEmpty) {
-  //     return;
-  //   }
-  //   var controller = showLoading ? showLoadingDialog(App.globalContext!) : null;
-  //   var dio = logDio();
-  //   var res = await dio.get<String>(
-  //       "https://raw.githubusercontent.com/user/repo/master/index.json");
-  //   if (res.statusCode != 200) {
-  //     showToast(message: "网络错误".tl);
-  //     return;
-  //   }
-  //   var list = jsonDecode(res.data!) as List;
-  //   var versions = <String, String>{};
-  //   for (var source in list) {
-  //     versions[source['key']] = source['version'];
-  //   }
-  //   var shouldUpdate = <String>[];
-  //   for (var source in ComicSource.sources) {
-  //     if (versions.containsKey(source.key) &&
-  //         versions[source.key] != source.version) {
-  //       shouldUpdate.add(source.key);
-  //     }
-  //   }
-  //   controller?.close();
-  //   if (shouldUpdate.isEmpty) {
-  //     return;
-  //   }
-  //   var msg = "";
-  //   for (var key in shouldUpdate) {
-  //     msg += "${ComicSource.find(key)?.name}: v${versions[key]}\n";
-  //   }
-  //   msg = msg.trim();
-  //   showConfirmDialog(App.globalContext!, "有可用更新".tl, msg, () {
-  //     for (var key in shouldUpdate) {
-  //       var source = ComicSource.find(key);
-  //       _ComicSourceSettingsState.update(source!);
-  //     }
-  //   });
-  // }
+  static Future<void> checkCustomComicSourceUpdate(
+      [bool showLoading = false]) async {
+    final customSources =
+        ComicSource.sources.where((source) => !source.isBuiltIn).toList();
+    if (customSources.isEmpty) {
+      if (showLoading) {
+        showToast(message: "没有已安装的自定义漫画源".tl);
+      }
+      return;
+    }
+
+    final controller =
+        showLoading ? showLoadingDialog(App.globalContext!) : null;
+    try {
+      final res = await logDio().get<String>(
+        appdata.appSettings.comicSourceListUrl,
+        options: Options(responseType: ResponseType.plain),
+      );
+      final list = jsonDecode(res.data!) as List;
+      final versions = <String, String>{};
+      for (var item in list.whereType<Map>()) {
+        final key = item['key']?.toString();
+        final version = item['version']?.toString();
+        if (key != null && version != null) {
+          versions[key] = version;
+        }
+      }
+
+      final updates = <ComicSource, String>{};
+      for (var source in customSources) {
+        final version = versions[source.key];
+        if (version == null) {
+          continue;
+        }
+        try {
+          if (compareSemVer(version, source.version)) {
+            updates[source] = version;
+          }
+        } catch (_) {}
+      }
+
+      controller?.close();
+      if (updates.isEmpty) {
+        if (showLoading) {
+          showToast(message: "已是最新版本".tl);
+        }
+        return;
+      }
+
+      final message = updates.entries
+          .map((entry) => "${entry.key.name}: ${entry.key.version} -> ${entry.value}")
+          .join("\n");
+      showConfirmDialog(App.globalContext!, "有可用更新".tl, message, () async {
+        final failures = <String>[];
+        for (var source in updates.keys) {
+          final currentSource = ComicSource.find(source.key);
+          if (currentSource != null) {
+            try {
+              await _ComicSourceSettingsState.update(currentSource, false);
+            } catch (_) {
+              failures.add(source.name);
+            }
+          }
+        }
+        if (failures.isEmpty) {
+          showToast(message: "漫画源更新完成".tl);
+        } else {
+          showToast(message: "更新失败: ${failures.join(', ')}".tl);
+        }
+      });
+    } catch (e) {
+      controller?.close();
+      if (showLoading) {
+        showToast(message: e.toString());
+      }
+    }
+  }
 }
 
 extension _WidgetExt on Widget {
@@ -66,6 +103,11 @@ class _ComicSourceSettingsState extends State<ComicSourceSettings> {
   Widget build(BuildContext context) {
     return Column(
       children: [
+        SwitchSetting(
+          title: "启动时检查漫画源更新".tl,
+          settingsIndex: 80,
+          icon: const Icon(Icons.security_update),
+        ),
         buildCard(context),
         const _BuiltInSources(),
         if(appdata.appSettings.isComicSourceEnabled("picacg"))
@@ -185,27 +227,42 @@ class _ComicSourceSettingsState extends State<ComicSourceSettings> {
     }
   }
 
-  static void update(ComicSource source) async {
-    ComicSource.sources.remove(source);
+  static Future<void> update(ComicSource source,
+      [bool showLoading = true]) async {
     if (!source.url.isURL) {
-      showToast(message: "Invalid url config");
+      if (showLoading) {
+        showToast(message: "Invalid url config");
+        return;
+      }
+      throw "Invalid url config";
     }
     bool cancel = false;
-    var controller = showLoadingDialog(App.globalContext!,
-        onCancel: () => cancel = true, barrierDismissible: false);
+    final controller = showLoading
+        ? showLoadingDialog(App.globalContext!,
+            onCancel: () => cancel = true, barrierDismissible: false)
+        : null;
     try {
       var res = await logDio().get<String>(source.url,
           options: Options(responseType: ResponseType.plain));
       if (cancel) return;
-      controller.close();
+      ComicSource.sources.remove(source);
       await ComicSourceParser().parse(res.data!, source.filePath);
       await File(source.filePath).writeAsString(res.data!);
+      controller?.close();
+      await ComicSource.reload();
+      MyApp.updater?.call();
     } catch (e) {
       if (cancel) return;
-      showToast(message: e.toString());
+      controller?.close();
+      if (!ComicSource.sources.contains(source)) {
+        await ComicSource.reload();
+      }
+      if (showLoading) {
+        showToast(message: e.toString());
+        return;
+      }
+      rethrow;
     }
-    await ComicSource.reload();
-    MyApp.updater?.call();
   }
 
   Widget buildCard(BuildContext context) {
@@ -217,27 +274,7 @@ class _ComicSourceSettingsState extends State<ComicSourceSettings> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              title: Row(
-                children: [
-                  Text("添加漫画源".tl),
-                  const SizedBox(
-                    width: 2,
-                  ),
-                  InkWell(
-                    borderRadius: const BorderRadius.all(Radius.circular(18)),
-                    onTap: () => showDialogMessage(
-                        context,
-                        "警告".tl,
-                        "${"此功能已不再受支持".tl}\n${"请勿反馈相关问题".tl}"
-                    ),
-                    child: const Icon(
-                      Icons.warning_amber_rounded,
-                      color: Colors.red,
-                      size: 18,
-                    ),
-                  )
-                ]
-              ),
+              title: Text("添加漫画源".tl),
               leading: const Icon(Icons.dashboard_customize),
             ),
             TextField(
@@ -254,24 +291,37 @@ class _ComicSourceSettingsState extends State<ComicSourceSettings> {
                     },
                     onSubmitted: handleAddSource)
                 .paddingHorizontal(16)
-                .paddingBottom(32),
-            Row(
+                .paddingBottom(8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
-                const Spacer(),
-                TextButton(onPressed: chooseFile, child: Text("选择文件".tl))
-                    .paddingLeft(8),
-                const Spacer(),
-                TextButton(
-                    onPressed: () {
-                      showPopUpWidget(
-                          context, _ComicSourceList(handleAddSource));
-                    },
-                    child: Text("浏览列表".tl)),
-                const Spacer(),
-                // TextButton(onPressed: help, child: Text("查看帮助".tl))
-                //     .paddingRight(8),
+                FilledButton.tonalIcon(
+                  onPressed: chooseFile,
+                  icon: const Icon(Icons.file_open_outlined),
+                  label: Text("选择文件".tl),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: () => showPopUpWidget(
+                    context,
+                    _ComicSourceList(handleAddSource),
+                  ),
+                  icon: const Icon(Icons.list_alt),
+                  label: Text("浏览列表".tl),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: () =>
+                      ComicSourceSettings.checkCustomComicSourceUpdate(true),
+                  icon: const Icon(Icons.update),
+                  label: Text("检查更新".tl),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: help,
+                  icon: const Icon(Icons.help_outline),
+                  label: Text("查看帮助".tl),
+                ),
               ],
-            ),
+            ).paddingHorizontal(12).paddingVertical(8),
             const SizedBox(height: 8),
           ],
         ),
@@ -297,18 +347,25 @@ class _ComicSourceSettingsState extends State<ComicSourceSettings> {
     }
   }
 
-  // void help() {
-  //   launchUrlString(
-  //       "https://github.com/user/repo/blob/master/help.md");
-  // }
+  void help() {
+    launchUrlString(
+      "https://github.com/Pacalini/PicaComic/blob/master/doc/comic_source.md",
+    );
+  }
 
   Future<void> handleAddSource(String url) async {
+    url = url.trim();
     if (url.isEmpty) {
       return;
     }
-    var splits = url.split("/");
-    splits.removeWhere((element) => element == "");
-    var fileName = splits.last;
+    final uri = Uri.tryParse(url);
+    if (uri == null ||
+        !(uri.isScheme("http") || uri.isScheme("https"))) {
+      showToast(message: "无效的 URL".tl);
+      return;
+    }
+    final fileName =
+        uri.pathSegments.isEmpty ? "comic_source.js" : uri.pathSegments.last;
     bool cancel = false;
     var controller = showLoadingDialog(App.globalContext!,
         onCancel: () => cancel = true, barrierDismissible: false);
@@ -316,10 +373,11 @@ class _ComicSourceSettingsState extends State<ComicSourceSettings> {
       var res = await logDio()
           .get<String>(url, options: Options(responseType: ResponseType.plain));
       if (cancel) return;
-      controller.close();
       await addSource(res.data!, fileName);
+      controller.close();
     } catch (e) {
       if (cancel) return;
+      controller.close();
       showToast(message: e.toString());
     }
   }
@@ -343,68 +401,146 @@ class _ComicSourceList extends StatefulWidget {
 }
 
 class _ComicSourceListState extends State<_ComicSourceList> {
-  bool loading = true;
+  bool loading = false;
   List? json;
+  late final TextEditingController controller;
 
-  void load() async {
-    var dio = logDio();
-    var res = await dio.get<String>(
-        "https://raw.githubusercontent.com/wgh136/pica_configs/master/index.json");
-    if (res.statusCode != 200) {
-      showToast(message: "网络错误".tl);
+  @override
+  void initState() {
+    super.initState();
+    controller = TextEditingController(
+      text: appdata.appSettings.comicSourceListUrl,
+    );
+    load();
+  }
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> load() async {
+    final url = controller.text.trim();
+    if (url.isEmpty) {
+      setState(() {
+        json = const [];
+        loading = false;
+      });
       return;
     }
-    setState(() {
-      json = jsonDecode(res.data!);
-      loading = false;
-    });
+    setState(() => loading = true);
+    try {
+      final res = await logDio().get<String>(
+        url,
+        options: Options(responseType: ResponseType.plain),
+      );
+      final data = jsonDecode(res.data!);
+      if (data is! List) {
+        throw "漫画源列表格式无效".tl;
+      }
+      appdata.appSettings.comicSourceListUrl = url;
+      await appdata.updateSettings();
+      if (mounted) {
+        setState(() {
+          json = data;
+          loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          json = const [];
+          loading = false;
+        });
+      }
+      showToast(message: e.toString());
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text("漫画源".tl),
-        actions: const [
-          IconButton(onPressed: App.globalBack, icon: Icon(Icons.close)),
-        ],
-      ),
-      body: buildBody(),
-    );
+    return PopUpWidgetScaffold(title: "漫画源".tl, body: buildBody());
   }
 
   Widget buildBody() {
     if (loading) {
-      load();
       return const Center(child: CircularProgressIndicator());
-    } else {
-      var currentKey = ComicSource.sources.map((e) => e.key).toList();
-      return ListView.builder(
-        itemCount: json!.length,
-        itemBuilder: (context, index) {
-          var key = json![index]["key"];
-          var action = currentKey.contains(key)
-              ? const Icon(Icons.check)
-              : Tooltip(
-                  message: "Add",
-                  child: IconButton(
-                    icon: const Icon(Icons.add),
-                    onPressed: () async {
-                      await widget.onAdd(
-                          "https://raw.githubusercontent.com/wgh136/pica_configs/master/${json![index]["fileName"]}");
-                      setState(() {});
-                    },
-                  ),
-                );
-
-          return ListTile(
-            title: Text(json![index]["name"]),
-            subtitle: Text(json![index]["version"]),
-            trailing: action,
-          );
-        },
-      );
     }
+
+    final items = json ?? const [];
+    final currentKeys = ComicSource.sources.map((source) => source.key).toSet();
+    return ListView.builder(
+      itemCount: items.length + 1,
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.source_outlined),
+                title: Text("漫画源仓库地址".tl),
+              ),
+              TextField(
+                controller: controller,
+                decoration: InputDecoration(
+                  hintText: "index.json URL",
+                  border: const UnderlineInputBorder(),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                  suffixIcon: IconButton(
+                    tooltip: "刷新".tl,
+                    onPressed: load,
+                    icon: const Icon(Icons.refresh),
+                  ),
+                ),
+                keyboardType: TextInputType.url,
+                textInputAction: TextInputAction.go,
+                onSubmitted: (_) => load(),
+              ).paddingHorizontal(16).paddingBottom(12),
+              const Divider(),
+            ],
+          );
+        }
+
+        final item = Map<String, dynamic>.from(items[index - 1] as Map);
+        final key = item["key"]?.toString() ?? "";
+        final installed = currentKeys.contains(key);
+        final action = installed
+            ? const Icon(Icons.check)
+            : IconButton(
+                tooltip: "添加".tl,
+                icon: const Icon(Icons.add),
+                onPressed: () async {
+                  await widget.onAdd(_resolveSourceUrl(item));
+                  if (mounted) {
+                    setState(() {});
+                  }
+                },
+              );
+        final description = [
+          item["version"]?.toString(),
+          item["description"]?.toString(),
+        ].whereType<String>().where((text) => text.isNotEmpty).join("\n");
+
+        return ListTile(
+          title: Text(item["name"]?.toString() ?? key),
+          subtitle: description.isEmpty ? null : Text(description),
+          trailing: action,
+        );
+      },
+    );
+  }
+
+  String _resolveSourceUrl(Map<String, dynamic> item) {
+    final directUrl = item["url"]?.toString();
+    if (directUrl != null && directUrl.isURL) {
+      return directUrl;
+    }
+    final fileName = item["fileName"]?.toString();
+    if (fileName == null || fileName.isEmpty) {
+      throw "漫画源条目缺少 fileName".tl;
+    }
+    return Uri.parse(controller.text.trim()).resolve(fileName).toString();
   }
 }
 
@@ -470,6 +606,7 @@ void _validatePages() {
   var explorePages = appdata.appSettings.explorePages;
   var categoryPages = appdata.appSettings.categoryPages;
   var networkFavorites = appdata.appSettings.networkFavorites;
+  var searchSources = appdata.appSettings.aggregatedSearchSources;
 
   var totalExplorePages = ComicSource.sources
       .map((e) => e.explorePages.map((e) => e.title))
@@ -486,6 +623,10 @@ void _validatePages() {
       .map((e) => e!)
       .toList();
 
+  var totalSearchSources = ComicSource.sources
+      .where((source) => source.searchPageData != null)
+      .map((source) => source.key)
+      .toList();
   for (var page in List.from(explorePages)) {
     if (!totalExplorePages.contains(page)) {
       explorePages.remove(page);
@@ -501,10 +642,16 @@ void _validatePages() {
       networkFavorites.remove(page);
     }
   }
+  for (var source in List.from(searchSources)) {
+    if (!totalSearchSources.contains(source)) {
+      searchSources.remove(source);
+    }
+  }
 
   appdata.appSettings.explorePages = explorePages;
   appdata.appSettings.categoryPages = categoryPages;
   appdata.appSettings.networkFavorites = networkFavorites;
+  appdata.appSettings.aggregatedSearchSources = searchSources;
 
   appdata.updateSettings();
 }
@@ -513,6 +660,7 @@ void _addAllPagesWithComicSource(ComicSource source) {
   var explorePages = appdata.appSettings.explorePages;
   var categoryPages = appdata.appSettings.categoryPages;
   var networkFavorites = appdata.appSettings.networkFavorites;
+  var searchSources = appdata.appSettings.aggregatedSearchSources;
 
   if (source.explorePages.isNotEmpty) {
     for (var page in source.explorePages) {
@@ -529,10 +677,14 @@ void _addAllPagesWithComicSource(ComicSource source) {
       !networkFavorites.contains(source.favoriteData!.key)) {
     networkFavorites.add(source.favoriteData!.key);
   }
+  if (source.searchPageData != null && !searchSources.contains(source.key)) {
+    searchSources.add(source.key);
+  }
 
   appdata.appSettings.explorePages = explorePages.toSet().toList();
   appdata.appSettings.categoryPages = categoryPages.toSet().toList();
   appdata.appSettings.networkFavorites = networkFavorites.toSet().toList();
+  appdata.appSettings.aggregatedSearchSources = searchSources.toSet().toList();
 
   appdata.updateSettings();
 }

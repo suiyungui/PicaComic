@@ -74,6 +74,7 @@ class ComicSource {
     final path = "${App.dataPath}/comic_source";
     if (!(await Directory(path).exists())) {
       Directory(path).create();
+      await _initializeAggregatedSearchSources();
       return;
     }
     await for (var entity in Directory(path).list()) {
@@ -87,6 +88,18 @@ class ComicSource {
         }
       }
     }
+    await _initializeAggregatedSearchSources();
+  }
+
+  static Future<void> _initializeAggregatedSearchSources() async {
+    if (appdata.settings[90] != "*") {
+      return;
+    }
+    appdata.appSettings.aggregatedSearchSources = sources
+        .where((source) => source.searchPageData != null)
+        .map((source) => source.key)
+        .toList();
+    await appdata.updateSettings();
   }
 
   static Future reload() async {

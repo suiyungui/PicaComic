@@ -134,6 +134,8 @@ abstract class ComicsPage<T extends BaseComic> extends StatelessWidget {
 
   List<ComicTileMenuOption>? get addonMenuOptions => null;
 
+  Iterable<String> get blockingContext => const [];
+
   /// 刷新页面
   void refresh() {
     StateController.find<ComicsPageLogic<T>>(tag: tag).refresh();
@@ -201,7 +203,7 @@ abstract class ComicsPage<T extends BaseComic> extends StatelessWidget {
               List<T> comics = [];
               if (appdata.appSettings.fullyHideBlockedWorks) {
                 for (var comic in logic.comics!) {
-                  if (isBlocked(comic) == null) {
+                  if (isBlocked(comic, blockingContext: blockingContext) == null) {
                     comics.add(comic);
                   }
                 }
@@ -259,7 +261,7 @@ abstract class ComicsPage<T extends BaseComic> extends StatelessWidget {
               List<T> comics = [];
               if (appdata.appSettings.fullyHideBlockedWorks) {
                 for (var comic in logic.dividedComics![logic.current]!) {
-                  if (isBlocked(comic) == null) {
+                  if (isBlocked(comic, blockingContext: blockingContext) == null) {
                     comics.add(comic);
                   }
                 }
@@ -578,7 +580,13 @@ abstract class ComicsPage<T extends BaseComic> extends StatelessWidget {
   }
 
   Widget buildItem(BuildContext context, T item) {
-    return buildComicTile(context, item, sourceKey, addonMenuOptions: addonMenuOptions);
+    return buildComicTile(
+      context,
+      item,
+      sourceKey,
+      addonMenuOptions: addonMenuOptions,
+      blockingContext: blockingContext,
+    );
   }
 }
 
@@ -590,6 +598,7 @@ class SliverGridComics extends StatelessWidget {
     required this.comics,
     required this.sourceKey,
     this.onLastItemBuild,
+    this.blockingContext = const [],
   });
 
   final List<BaseComic> comics;
@@ -597,6 +606,8 @@ class SliverGridComics extends StatelessWidget {
   final String sourceKey;
 
   final void Function()? onLastItemBuild;
+
+  final Iterable<String> blockingContext;
 
   @override
   Widget build(BuildContext context) {
@@ -606,7 +617,7 @@ class SliverGridComics extends StatelessWidget {
         List<BaseComic> comics = [];
         if (appdata.appSettings.fullyHideBlockedWorks) {
           for (var comic in this.comics) {
-            if (isBlocked(comic) == null) {
+            if (isBlocked(comic, blockingContext: blockingContext) == null) {
               comics.add(comic);
             }
           }
@@ -617,6 +628,7 @@ class SliverGridComics extends StatelessWidget {
           comics: comics,
           sourceKey: sourceKey,
           onLastItemBuild: onLastItemBuild,
+          blockingContext: blockingContext,
         );
       },
     );
@@ -628,6 +640,7 @@ class _SliverGridComics extends StatelessWidget {
     required this.comics,
     required this.sourceKey,
     this.onLastItemBuild,
+    this.blockingContext = const [],
   });
 
   final List<BaseComic> comics;
@@ -635,6 +648,8 @@ class _SliverGridComics extends StatelessWidget {
   final String sourceKey;
 
   final void Function()? onLastItemBuild;
+
+  final Iterable<String> blockingContext;
 
   @override
   Widget build(BuildContext context) {
@@ -644,7 +659,12 @@ class _SliverGridComics extends StatelessWidget {
           if (index == comics.length - 1) {
             onLastItemBuild?.call();
           }
-          return buildComicTile(context, comics[index], sourceKey);
+          return buildComicTile(
+            context,
+            comics[index],
+            sourceKey,
+            blockingContext: blockingContext,
+          );
         },
         childCount: comics.length,
       ),

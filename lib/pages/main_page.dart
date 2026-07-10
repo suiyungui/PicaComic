@@ -114,6 +114,18 @@ class MainPageState extends State<MainPage> {
 
   void _checkUpdates() async {
     var s = await SharedPreferences.getInstance();
+    if (appdata.settings[80] == "1") {
+      final lastSourceCheck = s.getInt("lastCheckComicSourceUpdate");
+      if (lastSourceCheck == null ||
+          DateTime.now()
+                  .difference(DateTime.fromMillisecondsSinceEpoch(lastSourceCheck))
+                  .inDays >=
+              1) {
+        ComicSourceSettings.checkCustomComicSourceUpdate();
+        s.setInt(
+            "lastCheckComicSourceUpdate", DateTime.now().millisecondsSinceEpoch);
+      }
+    }
     var lastCheck = s.getInt("lastCheckUpdate");
     if (lastCheck != null) {
       if (DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(lastCheck)).inDays < 1) {
@@ -154,9 +166,6 @@ class MainPageState extends State<MainPage> {
           );
         });
 
-    // if (appdata.settings[80] == "1") {
-    //   ComicSourceSettings.checkCustomComicSourceUpdate();
-    // }
   }
 
   void _checkDownload() {

@@ -5,6 +5,7 @@ import 'package:pica_comic/components/components.dart';
 import 'package:pica_comic/foundation/app.dart';
 import 'package:pica_comic/foundation/pair.dart';
 import 'package:pica_comic/foundation/ui_mode.dart';
+import 'package:pica_comic/pages/aggregated_search_page.dart';
 import 'package:pica_comic/pages/comic_page.dart';
 import 'package:pica_comic/pages/search_result_page.dart';
 import 'package:pica_comic/tools/app_links.dart';
@@ -124,6 +125,8 @@ class PreSearchController extends StateController {
 
   bool limitHistory = true;
 
+  bool aggregatedSearch = false;
+
   void updateOptions() {
     for (var source in ComicSource.sources) {
       if (source.key == target &&
@@ -137,8 +140,14 @@ class PreSearchController extends StateController {
   }
 
   void updateTarget(String i) {
+    aggregatedSearch = false;
     target = i;
     updateOptions();
+    update();
+  }
+
+  void updateAggregatedSearch(bool value) {
+    aggregatedSearch = value;
     update();
   }
 
@@ -172,7 +181,8 @@ class PreSearchPage extends StatelessWidget {
   void search([String? s, String? type]) {
     var keyword = (s ?? controller.text).trim();
 
-    if (searchController.language != null &&
+    if (!searchController.aggregatedSearch &&
+        searchController.language != null &&
         searchController.searchPageData.enableLanguageFilter) {
       // 在添加语言筛选前，先移除掉可能存在的 language: 部分
       // 主要是为了解决强迫症
@@ -182,13 +192,19 @@ class PreSearchPage extends StatelessWidget {
     }
 
     var context = App.mainNavigatorKey!.currentContext!;
-    context.to(
-      () => SearchResultPage(
-        keyword: keyword,
-        sourceKey: type ?? searchController.target,
-        options: searchController.options,
-      ),
-    );
+    if (searchController.aggregatedSearch && type == null) {
+      context.to(
+        () => AggregatedSearchPage(keyword: keyword),
+      );
+    } else {
+      context.to(
+        () => SearchResultPage(
+          keyword: keyword,
+          sourceKey: type ?? searchController.target,
+          options: searchController.options,
+        ),
+      );
+    }
   }
 
   void findSuggestions() {
@@ -538,7 +554,7 @@ class PreSearchPage extends StatelessWidget {
           padding: const EdgeInsets.all(4),
           child: FilterChip(
             label: Text(text),
-            selected: logic.target == id,
+            selected: !logic.aggregatedSearch && logic.target == id,
             onSelected: (b) {
               logic.updateTarget(id);
             },
@@ -554,6 +570,16 @@ class PreSearchPage extends StatelessWidget {
             ListTile(title: Text("目标".tl)),
             Wrap(
               children: [
+                Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: FilterChip(
+                    label: Text("聚合搜索".tl),
+                    selected: logic.aggregatedSearch,
+                    onSelected: (value) {
+                      logic.updateAggregatedSearch(value);
+                    },
+                  ),
+                ),
                 for (var source in comicSources)
                   buildItem(logic, source.key, source.name.tl)
               ],
@@ -593,6 +619,9 @@ class PreSearchPage extends StatelessWidget {
     return StateBuilder<PreSearchController>(
       id: "mode",
       builder: (logic) {
+        if (logic.aggregatedSearch) {
+          return const SizedBox();
+        }
         var children = <Widget>[];
         if (logic.searchPageData.customOptionsBuilder != null) {
           children.add(

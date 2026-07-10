@@ -840,13 +840,14 @@ class CustomComicTile extends ComicTile {
 }
 
 Widget buildComicTile(BuildContext context, BaseComic item, String sourceKey,
-    {List<ComicTileMenuOption>? addonMenuOptions}) {
+    {List<ComicTileMenuOption>? addonMenuOptions,
+    Iterable<String> blockingContext = const []}) {
   var source = ComicSource.find(sourceKey);
   if (source == null) {
     throw "Comic Source $sourceKey Not Found";
   }
   if (!appdata.appSettings.fullyHideBlockedWorks || sourceKey == 'hitomi') {
-    var blockWord = isBlocked(item);
+    var blockWord = isBlocked(item, blockingContext: blockingContext);
     if (blockWord != null) {
       return Stack(
         children: [
@@ -885,33 +886,95 @@ Widget buildComicTile(BuildContext context, BaseComic item, String sourceKey,
 }
 
 /// return the first blocked keyword, or null if not blocked
-String? isBlocked(BaseComic item) {
+String? isBlocked(BaseComic item,
+    {Iterable<String> blockingContext = const []}) {
   for (var word in appdata.blockingKeyword) {
-    if (item.title.contains(word)) {
+    var normalizedWord = _normalizeBlockingText(word);
+    if (normalizedWord.isEmpty) {
+      continue;
+    }
+    if (_containsBlockingWord(item.title, normalizedWord)) {
       return word;
     }
-    if (item.subTitle.contains(word)) {
+    if (_containsBlockingWord(item.subTitle, normalizedWord)) {
       return word;
     }
-    if (item.description.contains(word)) {
+    if (_containsBlockingWord(item.description, normalizedWord)) {
       return word;
     }
     for (var tag in item.tags) {
-      if (tag == word) {
-        return word;
-      }
-      if (tag.contains(':')) {
-        tag = tag.split(':')[1];
-        if (tag == word) {
+      for (var candidate in _blockingCandidates(
+        tag,
+        translate: item.enableTagsTranslation,
+      )) {
+        if (_normalizeBlockingText(candidate) == normalizedWord) {
           return word;
         }
       }
-      if (item.enableTagsTranslation && tag.translateTagsToCN == word) {
-        return word;
+    }
+    for (var context in blockingContext) {
+      for (var candidate in _blockingCandidates(
+        context,
+        translate: item.enableTagsTranslation,
+      )) {
+        if (_normalizeBlockingText(candidate) == normalizedWord) {
+          return word;
+        }
       }
     }
   }
   return null;
+}
+
+bool _containsBlockingWord(String text, String normalizedWord) {
+  return _normalizeBlockingText(text).contains(normalizedWord);
+}
+
+String _normalizeBlockingText(String text) {
+  return text
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'[_-]+'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ');
+}
+
+String _stripSearchQuotes(String text) {
+  text = text.trim();
+  while (text.length >= 2 &&
+      ((text.startsWith('"') && text.endsWith('"')) ||
+          (text.startsWith("'") && text.endsWith("'")))) {
+    text = text.substring(1, text.length - 1).trim();
+  }
+  return text;
+}
+
+Iterable<String> _blockingCandidates(String text, {bool translate = false}) {
+  var candidates = LinkedHashSet<String>();
+
+  void add(String value) {
+    value = _stripSearchQuotes(value);
+    if (value.isEmpty) {
+      return;
+    }
+    candidates.add(value);
+    candidates.add(value.replaceAll(RegExp(r'[_-]+'), ' '));
+  }
+
+  void addWithNamespace(String value) {
+    add(value);
+    value = _stripSearchQuotes(value);
+    if (value.contains(':')) {
+      add(value.split(':').skip(1).join(':'));
+    }
+  }
+
+  addWithNamespace(text);
+  if (translate) {
+    for (var candidate in candidates.toList()) {
+      addWithNamespace(candidate.translateTagsToCN);
+    }
+  }
+  return candidates;
 }
 
 class _BlockingPane extends StatefulWidget {

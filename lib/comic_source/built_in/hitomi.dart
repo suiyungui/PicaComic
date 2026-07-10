@@ -8,12 +8,42 @@ import 'package:pica_comic/foundation/image_loader/cached_image.dart';
 import 'package:pica_comic/foundation/local_favorites.dart';
 import 'package:pica_comic/network/hitomi_network/hitomi_main_network.dart';
 import 'package:pica_comic/network/hitomi_network/hitomi_models.dart';
+import 'package:pica_comic/network/res.dart';
 import 'package:pica_comic/pages/comic_page.dart';
 import 'package:pica_comic/pages/hitomi/hitomi_comic_page.dart';
 import 'package:pica_comic/pages/hitomi/hitomi_home_page.dart';
 import 'package:pica_comic/pages/hitomi/hitomi_search.dart';
 import 'package:pica_comic/pages/reader/comic_reading_page.dart';
 import 'package:pica_comic/tools/tags_translation.dart';
+
+Future<Res<List<BaseComic>>> _loadHitomiAggregatedSearch(
+  String keyword,
+  int page,
+  List<String> options,
+) async {
+  if (page != 1) {
+    return const Res<List<BaseComic>>([]);
+  }
+  final ids = await HiNetwork().search(keyword);
+  if (ids.error) {
+    return Res<List<BaseComic>>.fromErrorRes(ids);
+  }
+  final results = await Future.wait(
+    ids.data.take(12).map(
+          (id) => HiNetwork().getComicInfoBrief(id.toString()),
+        ),
+  );
+  final comics = results
+      .where((result) => result.success)
+      .map<BaseComic>((result) => result.data)
+      .toList();
+  if (comics.isEmpty && results.any((result) => result.error)) {
+    return Res.error(
+      results.firstWhere((result) => result.error).errorMessageWithoutNull,
+    );
+  }
+  return Res(comics, subData: 1);
+}
 
 final hitomi = ComicSource.named(
   name: "hitomi",
@@ -33,6 +63,7 @@ final hitomi = ComicSource.named(
     ),
   ],
   searchPageData: SearchPageData.named(
+    loadPage: _loadHitomiAggregatedSearch,
     overrideSearchResultBuilder: (keyword, options) {
       return HitomiSearchPage(keyword);
     },
