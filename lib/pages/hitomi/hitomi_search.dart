@@ -32,7 +32,6 @@ class _SearchPageComicListState
           delegate: SliverChildBuilderDelegate(
             (context, index) => HitomiComicTileDynamicLoading(
               data[index],
-              blockingContext: [widget.keyword],
             ),
             childCount: data.length,
           ),

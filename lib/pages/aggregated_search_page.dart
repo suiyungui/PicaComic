@@ -19,24 +19,29 @@ class AggregatedSearchPage extends StatefulWidget {
 
 class _AggregatedSearchPageState extends State<AggregatedSearchPage> {
   late final TextEditingController controller;
+  late final Set<String> selectedSourceKeys;
   late String keyword;
 
-  List<ComicSource> get sources {
-    final available = {
-      for (var source in ComicSource.sources)
-        if (source.searchPageData != null) source.key: source,
-    };
-    return appdata.appSettings.aggregatedSearchSources
-        .map((key) => available[key])
-        .whereType<ComicSource>()
-        .toList();
-  }
+  List<ComicSource> get availableSources => ComicSource.sources
+      .where((source) => source.searchPageData != null)
+      .toList();
+
+  List<ComicSource> get sources => availableSources
+      .where((source) => selectedSourceKeys.contains(source.key))
+      .toList();
 
   @override
   void initState() {
     super.initState();
     keyword = widget.keyword;
     controller = TextEditingController(text: keyword);
+    final availableKeys = availableSources.map((source) => source.key).toList();
+    final configured = appdata.appSettings.aggregatedSearchSources
+        .where(availableKeys.contains)
+        .toSet();
+    selectedSourceKeys = configured.isEmpty
+        ? availableKeys.toSet()
+        : configured;
   }
 
   @override
@@ -56,6 +61,37 @@ class _AggregatedSearchPageState extends State<AggregatedSearchPage> {
     });
   }
 
+  void selectAllSources() {
+    setState(() {
+      selectedSourceKeys
+        ..clear()
+        ..addAll(availableSources.map((source) => source.key));
+    });
+  }
+
+  void toggleSource(String key, bool selected) {
+    if (!selected && selectedSourceKeys.length == 1) {
+      showToast(message: "至少保留一个搜索源".tl);
+      return;
+    }
+    setState(() {
+      if (selected) {
+        selectedSourceKeys.add(key);
+      } else {
+        selectedSourceKeys.remove(key);
+      }
+    });
+  }
+
+  Future<void> saveDefaultSources() async {
+    appdata.appSettings.aggregatedSearchSources = availableSources
+        .where((source) => selectedSourceKeys.contains(source.key))
+        .map((source) => source.key)
+        .toList();
+    await appdata.updateSettings();
+    showToast(message: "已保存默认搜索源".tl);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -65,6 +101,13 @@ class _AggregatedSearchPageState extends State<AggregatedSearchPage> {
           _AggregatedSearchBar(
             controller: controller,
             onSearch: search,
+          ),
+          _AggregatedSourceSelector(
+            sources: availableSources,
+            selectedSourceKeys: selectedSourceKeys,
+            onSelectAll: selectAllSources,
+            onSourceChanged: toggleSource,
+            onSave: saveDefaultSources,
           ),
           Expanded(
             child: SmoothCustomScrollView(
@@ -80,7 +123,8 @@ class _AggregatedSearchPageState extends State<AggregatedSearchPage> {
                   )
                 else
                   SliverList(
-                    key: ValueKey(keyword),
+                    key: ValueKey(
+                        "$keyword@${selectedSourceKeys.join(',')}"),
                     delegate: SliverChildBuilderDelegate(
                       (context, index) {
                         final source = sources[index];
@@ -105,6 +149,67 @@ class _AggregatedSearchPageState extends State<AggregatedSearchPage> {
   }
 }
 
+class _AggregatedSourceSelector extends StatelessWidget {
+  const _AggregatedSourceSelector({
+    required this.sources,
+    required this.selectedSourceKeys,
+    required this.onSelectAll,
+    required this.onSourceChanged,
+    required this.onSave,
+  });
+
+  final List<ComicSource> sources;
+  final Set<String> selectedSourceKeys;
+  final VoidCallback onSelectAll;
+  final void Function(String, bool) onSourceChanged;
+  final Future<void> Function() onSave;
+
+  @override
+  Widget build(BuildContext context) {
+    if (sources.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final allSelected =
+        sources.every((source) => selectedSourceKeys.contains(source.key));
+    final chips = <Widget>[
+      FilterChip(
+        label: Text("全部".tl),
+        selected: allSelected,
+        onSelected: (_) => onSelectAll(),
+      ),
+      for (final source in sources)
+        FilterChip(
+          label: Text(source.name.tl),
+          selected: selectedSourceKeys.contains(source.key),
+          onSelected: (selected) => onSourceChanged(source.key, selected),
+        ),
+    ];
+
+    return SizedBox(
+      height: 52,
+      child: Row(
+        children: [
+          Expanded(
+            child: ListView.separated(
+              padding: const EdgeInsets.only(left: 12, right: 8),
+              scrollDirection: Axis.horizontal,
+              itemBuilder: (context, index) => chips[index],
+              separatorBuilder: (context, index) => const SizedBox(width: 8),
+              itemCount: chips.length,
+            ),
+          ),
+          const VerticalDivider(indent: 10, endIndent: 10, width: 1),
+          IconButton(
+            tooltip: "保存为默认".tl,
+            icon: const Icon(Icons.save_outlined),
+            onPressed: () => onSave(),
+          ),
+          const SizedBox(width: 4),
+        ],
+      ),
+    );
+  }
+}
 class _AggregatedSearchBar extends StatelessWidget {
   const _AggregatedSearchBar({
     required this.controller,
@@ -203,6 +308,13 @@ class _AggregatedSourceResultState extends State<_AggregatedSourceResult>
       final options =
           (data.searchOptions ?? []).map((e) => e.defaultValue).toList();
       final res = await loader(widget.keyword, 1, options);
+      List<BaseComic>? visibleComics;
+      if (!res.error) {
+        visibleComics = await filterBlockedComics(
+          res.data,
+          widget.source.key,
+        );
+      }
       if (!mounted) {
         return;
       }
@@ -211,14 +323,7 @@ class _AggregatedSourceResultState extends State<_AggregatedSourceResult>
         if (res.error) {
           error = res.errorMessage ?? "搜索失败".tl;
         } else {
-          comics = appdata.appSettings.fullyHideBlockedWorks
-              ? res.data
-                  .where((comic) => isBlocked(
-                        comic,
-                        blockingContext: [widget.keyword],
-                      ) == null)
-                  .toList()
-              : res.data;
+          comics = visibleComics;
         }
       });
     } catch (e) {
@@ -287,7 +392,6 @@ class _AggregatedSourceResultState extends State<_AggregatedSourceResult>
                         context,
                         comics![index],
                         widget.source.key,
-                        blockingContext: [widget.keyword],
                       ),
                     );
                   },

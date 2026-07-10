@@ -164,6 +164,19 @@ abstract class ComicsPage<T extends BaseComic> extends StatelessWidget {
       return widget;
     }
 
+    Future<Res<List<T>>> loadVisibleComics(int page) async {
+      final res = await getComics(page);
+      if (res.error) {
+        return res;
+      }
+      final comics = await filterBlockedComics(
+        res.data,
+        sourceKey,
+        blockingContext: blockingContext,
+      );
+      return Res(comics, subData: res.subData);
+    }
+
     Widget body = StateBuilder<ComicsPageLogic<T>>(
         init: ComicsPageLogic<T>(),
         tag: tag,
@@ -174,7 +187,7 @@ abstract class ComicsPage<T extends BaseComic> extends StatelessWidget {
             logic.loading = true;
           }
           if (logic.loading) {
-            logic.get(getComics);
+            logic.get(loadVisibleComics);
             return Column(
               children: [
                 if (title != null) const Appbar(title: Text("")),
@@ -238,7 +251,7 @@ abstract class ComicsPage<T extends BaseComic> extends StatelessWidget {
                     delegate: SliverChildBuilderDelegate(
                         childCount: comics.length, (context, i) {
                       if (i == comics.length - 1) {
-                        logic.loadNextPage(getComics);
+                        logic.loadNextPage(loadVisibleComics);
                       }
                       return buildItem(context, comics[i]);
                     }),

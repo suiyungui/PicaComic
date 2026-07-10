@@ -847,7 +847,11 @@ Widget buildComicTile(BuildContext context, BaseComic item, String sourceKey,
     throw "Comic Source $sourceKey Not Found";
   }
   if (!appdata.appSettings.fullyHideBlockedWorks || sourceKey == 'hitomi') {
-    var blockWord = isBlocked(item, blockingContext: blockingContext);
+    var blockWord = blockedWordForComic(
+      item,
+      sourceKey,
+      blockingContext: blockingContext,
+    );
     if (blockWord != null) {
       return Stack(
         children: [
@@ -888,35 +892,49 @@ Widget buildComicTile(BuildContext context, BaseComic item, String sourceKey,
 /// return the first blocked keyword, or null if not blocked
 String? isBlocked(BaseComic item,
     {Iterable<String> blockingContext = const []}) {
+  return _findBlockedKeyword(
+    title: item.title,
+    subTitle: item.subTitle,
+    description: item.description,
+    tags: item.tags,
+    blockingContext: blockingContext,
+    translateTags: item.enableTagsTranslation,
+  );
+}
+
+String? _findBlockedKeyword({
+  required String title,
+  required String subTitle,
+  required String description,
+  required Iterable<String> tags,
+  required Iterable<String> blockingContext,
+  required bool translateTags,
+}) {
   for (var word in appdata.blockingKeyword) {
     var normalizedWord = _normalizeBlockingText(word);
     if (normalizedWord.isEmpty) {
       continue;
     }
-    if (_containsBlockingWord(item.title, normalizedWord)) {
+    if (_containsBlockingWord(title, normalizedWord)) {
       return word;
     }
-    if (_containsBlockingWord(item.subTitle, normalizedWord)) {
+    if (_containsBlockingWord(subTitle, normalizedWord)) {
       return word;
     }
-    if (_containsBlockingWord(item.description, normalizedWord)) {
+    if (_containsBlockingWord(description, normalizedWord)) {
       return word;
     }
-    for (var tag in item.tags) {
-      for (var candidate in _blockingCandidates(
-        tag,
-        translate: item.enableTagsTranslation,
-      )) {
+    for (var tag in tags) {
+      for (var candidate
+          in _blockingCandidates(tag, translate: translateTags)) {
         if (_normalizeBlockingText(candidate) == normalizedWord) {
           return word;
         }
       }
     }
     for (var context in blockingContext) {
-      for (var candidate in _blockingCandidates(
-        context,
-        translate: item.enableTagsTranslation,
-      )) {
+      for (var candidate
+          in _blockingCandidates(context, translate: translateTags)) {
         if (_normalizeBlockingText(candidate) == normalizedWord) {
           return word;
         }

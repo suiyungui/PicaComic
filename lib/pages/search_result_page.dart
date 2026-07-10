@@ -43,9 +43,6 @@ class _SearchPageComicList extends ComicsPage<BaseComic> {
 
   @override
   String? get title => null;
-
-  @override
-  Iterable<String> get blockingContext => [keyword];
 }
 
 class SearchResultPage extends StatelessWidget {
