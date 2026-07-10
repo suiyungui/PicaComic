@@ -43,3 +43,4 @@ void main() {
     expect(comic.lang, 'English');
     expect(comic.tags, contains('yaoi'));
   });
+}

@@ -98,7 +98,7 @@ void main() {
       '',
       '',
       'fallback-tags',
-      const [],
+      [],
       '',
       'tag_fallback_test',
     );
