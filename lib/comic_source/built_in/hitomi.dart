@@ -6,6 +6,7 @@ import 'package:pica_comic/foundation/def.dart';
 import 'package:pica_comic/foundation/history.dart';
 import 'package:pica_comic/foundation/image_loader/cached_image.dart';
 import 'package:pica_comic/foundation/local_favorites.dart';
+import 'package:pica_comic/network/base_comic.dart';
 import 'package:pica_comic/network/hitomi_network/hitomi_main_network.dart';
 import 'package:pica_comic/network/hitomi_network/hitomi_models.dart';
 import 'package:pica_comic/network/res.dart';

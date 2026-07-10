@@ -75,7 +75,7 @@ class _AggregatedSearchPageState extends State<AggregatedSearchPage> {
                     child: NetworkError(
                       message: "没有可搜索的漫画源".tl,
                       retry: () => context.pop(),
-                      buttonText: "返回".tl,
+                      withAppbar: false,
                     ),
                   )
                 else
