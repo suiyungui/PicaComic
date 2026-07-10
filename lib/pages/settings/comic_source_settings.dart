@@ -279,7 +279,7 @@ class _ComicSourceSettingsState extends State<ComicSourceSettings> {
             ),
             TextField(
                     decoration: InputDecoration(
-                        hintText: "URL",
+                        hintText: "JS URL / index.json URL",
                         border: const UnderlineInputBorder(),
                         contentPadding:
                             const EdgeInsets.symmetric(horizontal: 12),
@@ -373,12 +373,38 @@ class _ComicSourceSettingsState extends State<ComicSourceSettings> {
       var res = await logDio()
           .get<String>(url, options: Options(responseType: ResponseType.plain));
       if (cancel) return;
+      if (_isComicSourceIndex(res.data!)) {
+        appdata.appSettings.comicSourceListUrl = url;
+        await appdata.updateSettings();
+        controller.close();
+        if (mounted) {
+          showPopUpWidget(
+            context,
+            _ComicSourceList(handleAddSource),
+          );
+        }
+        return;
+      }
       await addSource(res.data!, fileName);
       controller.close();
     } catch (e) {
       if (cancel) return;
       controller.close();
       showToast(message: e.toString());
+    }
+  }
+
+  bool _isComicSourceIndex(String content) {
+    try {
+      final data = jsonDecode(content);
+      return data is List &&
+          data.isNotEmpty &&
+          data.every((item) =>
+              item is Map &&
+              item["key"] != null &&
+              (item["fileName"] != null || item["url"] != null));
+    } catch (_) {
+      return false;
     }
   }
 
