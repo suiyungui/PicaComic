@@ -27,6 +27,7 @@ final hcomic = ComicSource.named(
   categoryData: const CategoryData(
     title: 'H-Comic',
     key: 'hcomic',
+    enableRankingPage: false,
     categories: [
       FixedCategoryPart(
         '热门TAG',
