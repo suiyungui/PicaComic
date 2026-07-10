@@ -111,6 +111,48 @@ class NhentaiNetwork {
     return NhentaiComicBrief(name, img, id, lang, tagsRes);
   }
 
+  Map<String, dynamic>? parseEmbeddedGalleryData(Document document) {
+    for (final script in document.querySelectorAll(
+        'script[data-sveltekit-fetched]')) {
+      try {
+        final outer = jsonDecode(script.text);
+        if (outer is! Map || outer['body'] is! String) {
+          continue;
+        }
+        final body = jsonDecode(outer['body']);
+        if (body is Map && body['result'] is List) {
+          return Map<String, dynamic>.from(body);
+        }
+      } catch (_) {
+        // Ignore unrelated embedded responses.
+      }
+    }
+    return null;
+  }
+
+  NhentaiComicBrief parseComicWithTagIds(Element comicDom, Iterable tagIds) {
+    final comic = parseComic(comicDom);
+    final tags = tagIds
+        .map((id) => nhentaiTags[id.toString()])
+        .whereType<String>()
+        .toList();
+    var lang = comic.lang;
+    if (tagIds.any((id) => id.toString() == '12227')) {
+      lang = 'English';
+    } else if (tagIds.any((id) => id.toString() == '6346')) {
+      lang = '日本語';
+    } else if (tagIds.any((id) => id.toString() == '29963')) {
+      lang = '中文';
+    }
+    return NhentaiComicBrief(
+      comic.title,
+      comic.cover,
+      comic.id,
+      lang,
+      tags,
+    );
+  }
+
   List<T> removeNullValue<T extends Object>(List<T?> list) {
     while (list.remove(null)) {}
     return List.from(list);
@@ -187,6 +229,7 @@ class NhentaiNetwork {
       var document = parse(res.data);
 
       var comicDoms = document.querySelectorAll("div.gallery");
+      final embeddedData = parseEmbeddedGalleryData(document);
 
       var lastPagination = document
           .querySelector("section.pagination > a.last")
@@ -203,6 +246,35 @@ class NhentaiNetwork {
 
       if (comicDoms.isEmpty) {
         return const Res([], subData: 0);
+      }
+
+      if (embeddedData != null) {
+        final domById = <String, Element>{};
+        for (final comicDom in comicDoms) {
+          final href = comicDom.querySelector('a')?.attributes['href'];
+          if (href != null) {
+            domById[href.nums] = comicDom;
+          }
+        }
+        final comics = <NhentaiComicBrief>[];
+        for (final item in embeddedData['result'] as List) {
+          if (item is! Map || item['tag_ids'] is! Iterable) {
+            continue;
+          }
+          final comicDom = domById[item['id'].toString()];
+          if (comicDom != null) {
+            comics.add(parseComicWithTagIds(comicDom, item['tag_ids']));
+          }
+        }
+        if (comics.isNotEmpty) {
+          final maxPage = embeddedData['num_pages'];
+          return Res(
+            comics,
+            subData: maxPage is num
+                ? maxPage.toInt()
+                : (lastPagination == null ? 1 : int.parse(lastPagination)),
+          );
+        }
       }
 
       return Res(

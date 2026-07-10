@@ -128,6 +128,27 @@ final nhentai = ComicSource.named(
     ),
   ],
   idMatcher: RegExp(r"^(\d+|nh\d+|nhentai\d+)$"),
+  loadComicInfo: (id) async {
+    final res = await NhentaiNetwork().getComicInfo(id);
+    if (res.error) {
+      return Res.fromErrorRes(res);
+    }
+    final comic = res.data;
+    return Res(ComicInfoData(
+      comic.title,
+      comic.subTitle,
+      comic.cover,
+      null,
+      comic.tags,
+      null,
+      comic.thumbnails,
+      null,
+      1,
+      comic.recommendations,
+      'nhentai',
+      id,
+    ));
+  },
   searchPageData: SearchPageData.named(
     loadPage: (keyword, page, options) {
       return NhentaiNetwork()
