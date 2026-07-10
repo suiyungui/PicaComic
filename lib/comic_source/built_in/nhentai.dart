@@ -149,6 +149,20 @@ final nhentai = ComicSource.named(
       id,
     ));
   },
+  loadComicTags: (id) async {
+    final res = await NhentaiNetwork().getComicInfo(id);
+    if (res.error) {
+      return Res.fromErrorRes(res);
+    }
+    return Res([
+      for (final entry in res.data.tags.entries) ...[
+        for (final tag in entry.value) ...[
+          tag,
+          if (entry.key.trim().isNotEmpty) '${entry.key}:$tag',
+        ],
+      ],
+    ]);
+  },
   searchPageData: SearchPageData.named(
     loadPage: (keyword, page, options) {
       return NhentaiNetwork()

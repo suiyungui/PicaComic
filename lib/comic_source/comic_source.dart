@@ -37,6 +37,8 @@ typedef LoginFunction = Future<Res<bool>> Function(String, String);
 
 typedef LoadComicFunc = Future<Res<ComicInfoData>> Function(String id);
 
+typedef LoadComicTagsFunc = Future<Res<List<String>>> Function(String id);
+
 typedef LoadComicPagesFunc = Future<Res<List<String>>> Function(
     String id, String? ep);
 
@@ -142,6 +144,9 @@ class ComicSource {
   /// Load comic info.
   final LoadComicFunc? loadComicInfo;
 
+  /// Load the complete tag list without requiring full comic details.
+  final LoadComicTagsFunc? loadComicTags;
+
   /// Load comic pages.
   final LoadComicPagesFunc? loadComicPages;
 
@@ -236,7 +241,8 @@ class ComicSource {
       this.url,
       this.version,
       this.commentsLoader,
-      this.sendCommentFunc)
+      this.sendCommentFunc,
+      {this.loadComicTags})
       : initData = null,
         comicTileBuilderOverride = null,
         idMatcher = null,
@@ -253,6 +259,7 @@ class ComicSource {
     this.searchPageData,
     this.settings = const [],
     this.loadComicInfo,
+    this.loadComicTags,
     this.loadComicPages,
     this.getImageLoadingConfig,
     this.getThumbnailLoadingConfig,
@@ -278,6 +285,7 @@ class ComicSource {
         searchPageData = null,
         settings = [],
         loadComicInfo = null,
+        loadComicTags = null,
         loadComicPages = null,
         getImageLoadingConfig = null,
         getThumbnailLoadingConfig = null,

@@ -33,6 +33,9 @@ class _SearchPageComicList extends ComicsPage<BaseComic> {
   final Widget header;
 
   @override
+  bool get verifyBlockedTagsWithDetails => true;
+
+  @override
   Future<Res<List<BaseComic>>> getComics(int i) async {
     var loader = ComicSource.find(sourceKey)!.searchPageData!.loadPage!;
     return await loader(keyword, i, options);

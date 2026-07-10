@@ -898,7 +898,6 @@ String? isBlocked(BaseComic item,
     description: item.description,
     tags: item.tags,
     blockingContext: blockingContext,
-    translateTags: item.enableTagsTranslation,
   );
 }
 
@@ -908,7 +907,6 @@ String? _findBlockedKeyword({
   required String description,
   required Iterable<String> tags,
   required Iterable<String> blockingContext,
-  required bool translateTags,
 }) {
   for (var word in appdata.blockingKeyword) {
     var normalizedWord = _normalizeBlockingText(word);
@@ -925,16 +923,14 @@ String? _findBlockedKeyword({
       return word;
     }
     for (var tag in tags) {
-      for (var candidate
-          in _blockingCandidates(tag, translate: translateTags)) {
+      for (var candidate in _blockingCandidates(tag)) {
         if (_normalizeBlockingText(candidate) == normalizedWord) {
           return word;
         }
       }
     }
     for (var context in blockingContext) {
-      for (var candidate
-          in _blockingCandidates(context, translate: translateTags)) {
+      for (var candidate in _blockingCandidates(context)) {
         if (_normalizeBlockingText(candidate) == normalizedWord) {
           return word;
         }
@@ -966,7 +962,7 @@ String _stripSearchQuotes(String text) {
   return text;
 }
 
-Iterable<String> _blockingCandidates(String text, {bool translate = false}) {
+Iterable<String> _blockingCandidates(String text) {
   var candidates = LinkedHashSet<String>();
 
   void add(String value) {
@@ -987,11 +983,6 @@ Iterable<String> _blockingCandidates(String text, {bool translate = false}) {
   }
 
   addWithNamespace(text);
-  if (translate) {
-    for (var candidate in candidates.toList()) {
-      addWithNamespace(candidate.translateTagsToCN);
-    }
-  }
   return candidates;
 }
 

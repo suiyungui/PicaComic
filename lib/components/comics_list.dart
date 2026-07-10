@@ -136,6 +136,8 @@ abstract class ComicsPage<T extends BaseComic> extends StatelessWidget {
 
   Iterable<String> get blockingContext => const [];
 
+  bool get verifyBlockedTagsWithDetails => false;
+
   /// 刷新页面
   void refresh() {
     StateController.find<ComicsPageLogic<T>>(tag: tag).refresh();
@@ -173,6 +175,7 @@ abstract class ComicsPage<T extends BaseComic> extends StatelessWidget {
         res.data,
         sourceKey,
         blockingContext: blockingContext,
+        verifyWithDetails: verifyBlockedTagsWithDetails,
       );
       return Res(comics, subData: res.subData);
     }

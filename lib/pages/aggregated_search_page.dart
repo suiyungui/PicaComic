@@ -313,6 +313,7 @@ class _AggregatedSourceResultState extends State<_AggregatedSourceResult>
         visibleComics = await filterBlockedComics(
           res.data,
           widget.source.key,
+          verifyWithDetails: true,
         );
       }
       if (!mounted) {

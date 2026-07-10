@@ -40,7 +40,6 @@ String? blockedWordForComic(
     description: details.description,
     tags: details.tags,
     blockingContext: blockingContext,
-    translateTags: comic.enableTagsTranslation,
   );
 }
 
@@ -49,6 +48,7 @@ Future<List<T>> filterBlockedComics<T extends BaseComic>(
   String sourceKey, {
   Iterable<String> blockingContext = const [],
   int maxConcurrent = 4,
+  bool verifyWithDetails = false,
 }) async {
   final items = comics.toList();
   if (appdata.blockingKeyword.isEmpty || items.isEmpty) {
@@ -70,9 +70,11 @@ Future<List<T>> filterBlockedComics<T extends BaseComic>(
         blockingContext: blockingContext,
       );
 
+      final canLoadCompleteTags =
+          source?.loadComicTags != null || source?.loadComicInfo != null;
       if (blocked == null &&
-          comic.tags.isEmpty &&
-          source?.loadComicInfo != null) {
+          canLoadCompleteTags &&
+          (verifyWithDetails || comic.tags.isEmpty)) {
         final details = await _loadBlockingDetails(source!, comic.id);
         if (details != null) {
           blocked = _findBlockedKeyword(
@@ -81,7 +83,6 @@ Future<List<T>> filterBlockedComics<T extends BaseComic>(
             description: details.description,
             tags: details.tags,
             blockingContext: blockingContext,
-            translateTags: comic.enableTagsTranslation,
           );
         }
       }
@@ -123,6 +124,20 @@ Future<_BlockingDetails?> _loadBlockingDetails(
 
   final pending = () async {
     try {
+      if (source.loadComicTags != null) {
+        final tagsRes = await source.loadComicTags!(comicId);
+        if (!tagsRes.error) {
+          return _BlockingDetails(
+            title: '',
+            subTitle: '',
+            description: '',
+            tags: tagsRes.data,
+          );
+        }
+      }
+      if (source.loadComicInfo == null) {
+        return null;
+      }
       final res = await source.loadComicInfo!(comicId);
       if (res.error) {
         return null;
