@@ -189,15 +189,23 @@ class HComicNetwork {
   }
 }
 
-class HComicBrief extends BaseComic {
+class HComicBrief extends CustomComic {
   const HComicBrief({
-    required this.id,
-    required this.title,
-    required this.subTitle,
-    required this.cover,
-    required this.tags,
-    required this.description,
-  });
+    required String id,
+    required String title,
+    required String subTitle,
+    required String cover,
+    required List<String> tags,
+    required String description,
+  }) : super(
+          title,
+          subTitle,
+          cover,
+          id,
+          tags,
+          description,
+          'hcomic',
+        );
 
   factory HComicBrief.fromJson(Map<String, dynamic> json) {
     final titleData = Map<String, dynamic>.from(json['title'] as Map? ?? {});
@@ -217,23 +225,6 @@ class HComicBrief extends BaseComic {
     );
   }
 
-  @override
-  final String id;
-
-  @override
-  final String title;
-
-  @override
-  final String subTitle;
-
-  @override
-  final String cover;
-
-  @override
-  final List<String> tags;
-
-  @override
-  final String description;
 }
 
 class HComicDetails {

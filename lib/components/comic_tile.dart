@@ -884,8 +884,18 @@ Widget buildComicTile(BuildContext context, BaseComic item, String sourceKey,
       addonMenuOptions,
     );
   } else {
-    return CustomComicTile(item as CustomComic,
-        addonMenuOptions: addonMenuOptions);
+    final comic = item is CustomComic
+        ? item
+        : CustomComic(
+            item.title,
+            item.subTitle,
+            item.cover,
+            item.id,
+            item.tags,
+            item.description,
+            sourceKey,
+          );
+    return CustomComicTile(comic, addonMenuOptions: addonMenuOptions);
   }
 }
 

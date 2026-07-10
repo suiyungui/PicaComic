@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pica_comic/network/base_comic.dart';
 import 'package:pica_comic/network/hcomic_network.dart';
 
 void main() {
@@ -27,6 +28,8 @@ void main() {
     final comic = comics.single;
 
     expect((data['comics'] as List), hasLength(1));
+    expect(comic, isA<CustomComic>());
+    expect((comic as CustomComic).sourceKey, 'hcomic');
     expect(comic.id, '123|Display title');
     expect(comic.title, 'Display title');
     expect(comic.subTitle, 'English title');
